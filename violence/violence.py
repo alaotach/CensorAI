@@ -6,14 +6,23 @@ from PIL import Image
 model, preprocess, tokenizer = open_clip.create_model_and_transforms("ViT-B/32", pretrained="openai")
 
 # Load and preprocess the image
-image = preprocess(Image.open("/content/13guns-zkcq-videoSixteenByNine3000.jpg")).unsqueeze(0)
+image = preprocess(Image.open("/content/images (1).jpeg")).unsqueeze(0)
 
 # Define categories for classification
 text_descriptions = [
     "suicide attempt",
     "self-harm",
+    "sex",
+    "nude",
     "violent scene",
     "drugs and smoking",
+    "kiss",
+    "horror",
+    "death",
+    "alcohol",
+    "weapons",
+    "guns",
+    "gore",
     "safe and normal content"
 ]
 
