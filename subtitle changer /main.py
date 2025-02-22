@@ -2,11 +2,18 @@ from flask import Flask, request, jsonify
 from google.cloud import speech, storage
 import g4f
 import os
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 
 # Set up GCP authentication
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcp-key.json"
+
+
+
+def get_blob_name(url):
+    parsed_url = urlparse(url)
+    return "/".join(parsed_url.path.split("/")[2:])
 
 def download_audio_from_gcs(bucket_name, source_blob_name, destination_file_name):
     """Download an audio file from GCS"""
@@ -52,25 +59,22 @@ def analyze_text_with_g4f(text_segments):
         chunk = text_segments[i:i+100]
         text_content = "\n".join([item["sentence"] for item in chunk])
         response = g4f.ChatCompletion.create(
-            model=g4f.models.default,
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text_content}
-            ]
-        )
-        analyzed_results.append(response)
-    
-    return analyzed_results
-
+            ])
 @app.route('/process_audio', methods=['POST'])
 def process_audio():
     data = request.json
     bucket_name = "duhack"
-    source_blob_name = data.get('file_name')
+    source_url = data.get('wav')
     
     if not bucket_name or not source_blob_name:
         return jsonify({"error": "Missing parameters"}), 400
     
+    
+    source_blob_name = get_blob_name(source_url)
     local_audio_path = download_audio_from_gcs(bucket_name, source_blob_name, 'temp_audio.wav')
     transcript, timestamps = transcribe_audio(local_audio_path)
     analyzed_text = analyze_text_with_g4f(transcript)
