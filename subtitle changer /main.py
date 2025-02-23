@@ -70,7 +70,7 @@ def process_audio():
     bucket_name = "duhack"
     source_url = data.get('wav')
     
-    if not bucket_name or not source_blob_name:
+    if not source_url:
         return jsonify({"error": "Missing parameters"}), 400
     
     
