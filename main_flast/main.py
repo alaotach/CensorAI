@@ -9,13 +9,18 @@ PROCESS_AUDIO_API = os.getenv("PROCESS_AUDIO_API", "http://process-audio-service
 ADD_BEEP_API = os.getenv("ADD_BEEP_API", "http://add-beep-service:5000/add_beep")
 CONVERT_API = os.getenv("CONVERT_API", "http://convert-service:5000/convert")
 
+
+def random_string(length=5):
+    chars = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
+    return ''.join(random.choices(chars, k=length))
+    
 @app.route("/process_video", methods=["POST"])
 def process_video():
-    if "file" not in request.files or "username" not in request.form:
-        return jsonify({"error": "File and username are required"}), 400
+    if "file" not in request.files :
+        return jsonify({"error": "File is required"}), 400
     
     file = request.files["file"]
-    username = request.form["username"].strip()
+    username = random_string(5)
     
     # Step 1: Upload to Extract API
     extract_response = requests.post(EXTRACT_API, files={"file": file}, data={"username": username})
