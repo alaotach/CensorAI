@@ -49,6 +49,24 @@ def verify_audio_file(file_path):
         print(f"Failed to run ffprobe on {file_path}. Error: {e}")
         return False
 
+def repair_audio_file(file_path):
+    """Repairs an audio file by remuxing it with FFmpeg."""
+    repaired_file_path = file_path.replace('.mp3', '_repaired.mp3')  # Adjust extension if needed
+    try:
+        result = subprocess.run([
+            'ffmpeg', '-i', file_path, '-acodec', 'copy', '-y', repaired_file_path
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        if result.returncode != 0:
+            print(f"FFmpeg repair error: {result.stderr.decode('utf-8')}")
+            return None
+
+        print(f"Repaired file saved as {repaired_file_path}")
+        return repaired_file_path
+    except Exception as e:
+        print(f"Error repairing audio file {file_path}: {e}")
+        return None
+
 def upload_blob(bucket_name, source_file_name, destination_blob_name):
     """Uploads a file to the GCS bucket."""
     try:
@@ -67,38 +85,38 @@ def add_beep():
 
     audio_file_url = request.json['audio_file_url']
     durations = request.json['durations']
-    
+
     # Parse the URL to determine if it's a GCS URL or a normal URL
     parsed_url = urlparse(audio_file_url)
-    
+
     # Extract the file name from the URL
     original_file_name = os.path.basename(parsed_url.path)
     audio_filename = os.path.join(DOWNLOAD_DIR, original_file_name)
-    
+
     if parsed_url.scheme == 'gs':
-        # Handle Google Cloud Storage URL
         bucket_name = parsed_url.netloc
         blob_name = parsed_url.path.lstrip('/')
-        print(f"Parsed bucket name: {bucket_name}")
-        print(f"Parsed blob name: {blob_name}")
         try:
             download_blob(bucket_name, blob_name, audio_filename)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:
-        # Handle normal URL
         try:
             download_file(audio_file_url, audio_filename)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    # Ensure the file was downloaded successfully
     if not os.path.isfile(audio_filename):
         return jsonify({"error": f"File {audio_filename} not found after download"}), 500
 
-    # Verify the audio file
-    if not verify_audio_file(audio_filename):
-        return jsonify({"error": f"Invalid audio file: {audio_filename}"}), 400
+    # Repair the audio file before processing
+    repaired_audio_filename = repair_audio_file(audio_filename)
+    if not repaired_audio_filename:
+        return jsonify({"error": "Failed to repair the audio file"}), 500
+
+    # Verify the repaired audio file
+    if not verify_audio_file(repaired_audio_filename):
+        return jsonify({"error": f"Invalid repaired audio file: {repaired_audio_filename}"}), 400
 
     # Generate beep sound
     beep_filename = os.path.join(DOWNLOAD_DIR, 'beep.wav')
@@ -107,7 +125,6 @@ def add_beep():
         '-y', beep_filename
     ])
 
-    # Ensure the beep file was generated successfully
     if not os.path.isfile(beep_filename):
         return jsonify({"error": f"File {beep_filename} not generated"}), 500
 
@@ -121,23 +138,16 @@ def add_beep():
     filter_complex += ''.join([f'[a{i}out]' for i in range(len(durations))])
     filter_complex += f'concat=n={len(durations)}:v=0:a=1[outa]'
 
-    # Run ffmpeg command to add beep sound
     output_filename = os.path.join(DOWNLOAD_DIR, f'output_{original_file_name}')
     result = subprocess.run([
-        'ffmpeg', '-i', audio_filename, '-i', beep_filename, 
+        'ffmpeg', '-i', repaired_audio_filename, '-i', beep_filename, 
         '-filter_complex', filter_complex, '-map', '[outa]', 
         '-y', output_filename
     ])
 
-    # Log the ffmpeg output
-    print(f"ffmpeg output: {result.stdout}")
-    print(f"ffmpeg errors: {result.stderr}")
-
-    # Ensure the output file was generated successfully
     if not os.path.isfile(output_filename):
         return jsonify({"error": f"File {output_filename} not generated"}), 500
 
-    # Upload the output file to GCS
     output_blob_name = 'beeped_audio/' + os.path.basename(output_filename)
     try:
         upload_blob(bucket_name, output_filename, output_blob_name)
@@ -156,4 +166,4 @@ def download_file_route(filename):
     return send_from_directory(DOWNLOAD_DIR, filename)
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)   
