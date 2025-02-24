@@ -1,0 +1,10 @@
+flask
+moviepy
+numpy
+opencv-python
+Werkzeug
+torch
+open-clip-torch
+google-cloud-vision
+ultralytics
+Pillow
